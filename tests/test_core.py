@@ -79,6 +79,7 @@ class EngineContractTests(unittest.TestCase):
                 return self
 
             def transcribe(self, **kwargs: object) -> list[object]:
+                self.transcribe_kwargs = kwargs
                 return [types.SimpleNamespace(text="テストです。", language="Japanese")]
 
         fake_qwen = types.ModuleType("qwen_asr")
@@ -96,10 +97,15 @@ class EngineContractTests(unittest.TestCase):
                     "Qwen/Qwen3-ASR-0.6B", device="cpu", dtype="bfloat16"
                 )
                 engine.load()
-                result = engine.transcribe(wav_path)
+                result = engine.transcribe(
+                    wav_path, language="English", context="medical terms"
+                )
                 self.assertEqual(result.transcript, "テストです。")
                 self.assertEqual(result.detected_language, "Japanese")
                 self.assertGreaterEqual(result.rtf, 0.0)
+                self.assertEqual(engine.model.transcribe_kwargs["language"], "English")
+                self.assertEqual(engine.model.transcribe_kwargs["context"], "medical terms")
+                self.assertEqual(engine.language, "Japanese")
                 engine.unload()
 
 

@@ -1,6 +1,6 @@
-# QwenASRBench
+# QwenASR
 
-Qwen3-ASR 0.6B / 1.7B を、日本語（特に診察音声）で比較する独立したCLIベンチマークです。Transformers backendだけを使い、認識文、処理時間、RTF、PyTorchおよび `nvidia-smi` のVRAM値をJSON/CSVへ保存します。
+Qwen3-ASR 0.6B / 1.7Bの独立したCLIベンチマークとlocalhost HTTP APIです。Transformers backendだけを使い、CLIでは認識文、処理時間、RTF、PyTorchおよび `nvidia-smi` のVRAM値をJSON/CSVへ保存します。APIはSpeechSummarizerから利用できますが、プロセス、仮想環境、モデル、GPU障害の影響範囲はSpeechSummarizerから分離されています。
 
 このプロジェクトは [YUKI-ENT/SpeechSummarizer](https://github.com/YUKI-ENT/SpeechSummarizer) とコード・仮想環境・依存パッケージを共有しません。既存環境を変更せず、不要ならこのディレクトリだけを削除できます。CUDA ToolkitやNVIDIA driverを追加・変更する手順も含みません。
 
@@ -11,14 +11,14 @@ Qwen3-ASR 0.6B / 1.7B を、日本語（特に診察音声）で比較する独�
 - ffmpeg / ffprobe（MP3、M4A、および一部形式の長さ取得に使用）
 - モデル初回取得時のみインターネット接続
 
-Forced Aligner、timestamp、vLLM、Web UI、FastAPI、話者分離は現段階では使いません。
+Forced Aligner、timestamp、vLLM、Web UI、話者分離は現段階では使いません。
 
 ## セットアップ
 
 SpeechSummarizerとは別のディレクトリ、別のvenvで実行してください。
 
 ```bash
-cd /path/to/QwenASRBench
+cd /path/to/QwenASR
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -87,6 +87,68 @@ python app.py --model 0.6b --unload-after test_audio/sample.m4a
 
 `--model` を省略すると `model` を使います。FlashAttention 2は必須ではなく、標準PyTorch attentionで動作します。
 
+## localhost HTTP API
+
+APIは起動時に1モデルだけをロードし、停止まで常駐させます。複数リクエストは上限付きFIFOキューで待機し、GPU推論は必ず1件ずつ実行されます。VAD、音声分割、品質判定、Whisper fallback、認識結果の保存は行いません。
+
+API依存のFastAPI、Uvicorn、python-multipartは `requirements.txt` に含まれるため、通常のセットアップで導入されます。既存環境を更新する場合は、仮想環境内で次を実行します。
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+`config.json` のトップレベルに次を追加します。`model_alias` が空または未指定なら、トップレベルの `model` が使われます。APIは `unload_after` を無視しますが、既存CLIは従来どおりこの値を使います。
+
+```json
+"api": {
+  "host": "127.0.0.1",
+  "port": 8010,
+  "model_alias": "1.7b",
+  "max_queue_size": 20,
+  "request_timeout_sec": 30,
+  "max_audio_sec": 30,
+  "max_upload_mib": 10,
+  "max_context_chars": 2000
+}
+```
+
+起動と停止:
+
+```bash
+source .venv/bin/activate
+python server.py --config config.json
+# 停止は Ctrl+C
+```
+
+`--host` と `--port` でlisten先を上書きできますが、hostは `127.0.0.1`、`localhost`、`::1` のみ許可されます。Uvicorn workerは1つに固定されます。
+
+動作確認:
+
+```bash
+curl -s http://127.0.0.1:8010/health | python -m json.tool
+curl -s http://127.0.0.1:8010/ready | python -m json.tool
+curl -s -X POST http://127.0.0.1:8010/transcribe \
+  -F 'audio=@test_audio/sample.wav;type=audio/wav' \
+  -F 'request_id=manual-test-001' \
+  -F 'language=Japanese' \
+  -F 'context=耳鼻咽喉科の診察会話' | python -m json.tool
+```
+
+`POST /transcribe` はWAVの `multipart/form-data` だけを受け付け、認識文は `text` で返します。レスポンスには `schema_version: 1`、音声長、queue/推論/全体時間、RTFが含まれます。Qwenが提供しないconfidenceやWhisper風の疑似確率は返しません。`/ready` の `queue_depth` は待機中の件数で、実行中の1件は含みません。
+
+このAPIには認証やTLSがありません。患者音声を扱う可能性があるため、リバースプロキシ等を使ってLANやインターネットへ公開しないでください。uploadはサーバー生成名の一時ファイルとして扱われ、成功・失敗・タイムアウトのいずれでも推論が終わり次第削除されます。
+
+RTX 5080 16GB / bfloat16での既存実測では、0.6Bはロード後約2.1 GiB・推論時約2.2 GiB、1.7Bはロード後約4.7 GiB・推論時約4.9 GiBのプロセスVRAM使用量でした。音声長や環境で変動するため、余裕を確保してください。
+
+### APIのトラブルシューティング
+
+- モデル未配置 / offline時のキャッシュ不足: `local_model_paths` の相対パスが `config.json` 基準で正しいか、モデルが全部ダウンロード済みかを確認します。初回取得が必要なら一度 `offline: false` で取得します。
+- CUDA未検出: `nvidia-smi` と `python -c "import torch; print(torch.cuda.is_available())"` を確認し、CUDA版PyTorchが導入されているか確認します。
+- GPU OOM: 他のGPUプロセスを確認し、1.7Bから0.6Bへ変更します。APIはHTTP 503 / `gpu_out_of_memory` を返します。
+- queue full: 待機キュー上限でHTTP 429 / `queue_full` になります。呼び出し側で間隔を空けて再試行するか、GPUの処理速度とメモリに余裕がある場合だけ `max_queue_size` を調整します。
+- timeout: キュー待ちを含む `request_timeout_sec` でHTTP 504 / `request_timeout` になります。すでに始まったGPU推論は安全のため強制中断せず、完了後に結果を破棄してworkerを継続します。
+
 ## モデルの事前ダウンロードとオフライン運用
 
 オンライン環境で専用venvを有効にし、モデルをプロジェクト内へ取得します。
@@ -139,7 +201,7 @@ python benchmark.py --offline --continue-on-error test_audio/
 
 ```bash
 python -m unittest discover -s tests -v
-python -m compileall app.py benchmark.py audio_utils.py gpu_monitor.py qwen_asr_engine.py cli_common.py
+python -m compileall app.py benchmark.py server.py api_service.py audio_utils.py gpu_monitor.py qwen_asr_engine.py cli_common.py
 ```
 
 実機での最初の到達確認:
@@ -149,4 +211,4 @@ python app.py --model 0.6b test_audio/sample.wav
 python app.py --model 1.7b test_audio/sample.wav
 ```
 
-認識精度とVRAMの比較が良好なら、次段階でHTTP APIを独立プロセスとして追加し、SpeechSummarizerから呼び出す構成へ拡張できます。
+実機API確認ではサーバーを起動し、同じWAVを連続2回 `POST /transcribe` して、モデルが再ロードされないこともログとVRAMで確認します。

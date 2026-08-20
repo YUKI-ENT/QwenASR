@@ -145,21 +145,31 @@ class QwenASREngine:
         short_name = "1.7B" if "1.7B" in self.model_path.upper() else self.model_path
         return f"Qwen3-ASR {short_name}でGPUメモリ不足。0.6Bモデルを試してください。"
 
-    def transcribe(self, audio_file: str | Path) -> TranscriptionResult:
+    def transcribe(
+        self,
+        audio_file: str | Path,
+        language: str | None = None,
+        context: str | None = None,
+    ) -> TranscriptionResult:
+        """Transcribe one file without mutating the engine-wide language default."""
         if self.model is None:
             raise ASRError("モデルがロードされていません。")
         original_path = Path(audio_file).expanduser().resolve()
         duration = get_audio_duration(original_path)
+        effective_language = self.language if language is None else language
         self.monitor.reset_peak()
         self.monitor.start_peak_polling()
         started = time.perf_counter()
         try:
             with prepared_audio(original_path) as ready_path:
-                output = self.model.transcribe(
-                    audio=str(ready_path),
-                    language=self.language,
-                    return_time_stamps=False,
-                )
+                transcribe_kwargs: dict[str, Any] = {
+                    "audio": str(ready_path),
+                    "language": effective_language,
+                    "return_time_stamps": False,
+                }
+                if context is not None:
+                    transcribe_kwargs["context"] = context
+                output = self.model.transcribe(**transcribe_kwargs)
             self.monitor.synchronize()
             elapsed = time.perf_counter() - started
         except Exception as exc:
@@ -174,11 +184,9 @@ class QwenASREngine:
         finally:
             self.monitor.stop_peak_polling()
 
-        if not output:
-            raise ASRError("Qwen3-ASRから認識結果が返りませんでした。")
-        item = output[0]
-        transcript = str(getattr(item, "text", item)).strip()
-        detected_language = getattr(item, "language", None)
+        item = output[0] if output else None
+        transcript = "" if item is None else str(getattr(item, "text", item)).strip()
+        detected_language = None if item is None else getattr(item, "language", None)
         return TranscriptionResult(
             model=self.model_path,
             audio_file=str(original_path),
