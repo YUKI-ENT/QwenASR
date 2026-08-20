@@ -1,0 +1,21 @@
+{
+  "device": "cuda:0",
+  "dtype": "bfloat16",
+  "model": "Qwen/Qwen3-ASR-0.6B",
+  "language": "Japanese",
+  "max_new_tokens": 256,
+  "max_inference_batch_size": 1,
+  "model_cache_dir": "models",
+  "offline": false,
+  "unload_after": true,
+  "nvidia_smi_poll_interval_sec": 0.05,
+  "models": {
+    "0.6b": "Qwen/Qwen3-ASR-0.6B",
+    "1.7b": "Qwen/Qwen3-ASR-1.7B"
+  },
+  "local_model_paths": {
+    "0.6b": "",
+    "1.7b": ""
+  }
+}
+

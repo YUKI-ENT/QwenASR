@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local configuration / secrets
+config.json
+.env
+.env.*
+
+models/*
+!models/.gitkeep
+
+test_audio/*
+!test_audio/.gitkeep
+
+results/*
+!results/.gitkeep
