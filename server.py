@@ -29,6 +29,7 @@ from api_service import (
 from audio_utils import AudioError, get_audio_duration
 from cli_common import create_engine, load_config, resolve_model
 from qwen_asr_engine import ASRError
+from version import APP_VERSION
 
 
 LOGGER = logging.getLogger("qwen_asr.api")
@@ -135,7 +136,9 @@ def create_app(
             await service.stop()
             LOGGER.info("モデルを解放しました model=%s", model_name)
 
-    app = FastAPI(title="Qwen3-ASR Local API", version="1", lifespan=lifespan)
+    app = FastAPI(
+        title="Qwen3-ASR Local API", version=APP_VERSION, lifespan=lifespan
+    )
     app.state.service = service
     app.state.api_settings = settings
 
@@ -147,6 +150,7 @@ def create_app(
     async def health() -> dict[str, Any]:
         return {
             "schema_version": SCHEMA_VERSION,
+            "app_version": APP_VERSION,
             "status": "ok",
             "engine": "qwen3-asr",
             "backend": "transformers",
@@ -158,6 +162,7 @@ def create_app(
             return _error(503, None, "not_ready", "モデルの準備ができていません。", True)
         return {
             "schema_version": SCHEMA_VERSION,
+            "app_version": APP_VERSION,
             "status": "ready",
             "engine": "qwen3-asr",
             "backend": "transformers",
@@ -293,6 +298,7 @@ def create_app(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Qwen3-ASR localhost HTTP API")
+    parser.add_argument("--version", action="version", version=APP_VERSION)
     parser.add_argument("--config", default="config.json", help="設定JSON")
     parser.add_argument("--host", help="localhost listen address")
     parser.add_argument("--port", type=int, help="listen port")

@@ -121,6 +121,8 @@ python server.py --config config.json
 # 停止は Ctrl+C
 ```
 
+アプリケーションバージョンは `version.py` の `APP_VERSION`で、`YYYYMMDD` 形式（例: `20260821`）で一元管理します。`python server.py --version` で確認でき、`/health` と `/ready` の `app_version` にも同じ値が返ります。API互換性用の `schema_version` とは別の値です。
+
 `--host` と `--port` でlisten先を上書きできますが、hostは `127.0.0.1`、`localhost`、`::1` のみ許可されます。Uvicorn workerは1つに固定されます。
 
 動作確認:

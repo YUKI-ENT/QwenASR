@@ -113,11 +113,18 @@ class APITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(health.status_code, 200)
             self.assertEqual(
                 health.json(),
-                {"schema_version": 1, "status": "ok", "engine": "qwen3-asr", "backend": "transformers"},
+                {
+                    "schema_version": 1,
+                    "app_version": "20260821",
+                    "status": "ok",
+                    "engine": "qwen3-asr",
+                    "backend": "transformers",
+                },
             )
             ready = await client.get("/ready")
             self.assertEqual(ready.status_code, 200)
             self.assertEqual(ready.json()["model"], "0.6b")
+            self.assertEqual(ready.json()["app_version"], "20260821")
             self.assertEqual(ready.json()["model_id"], "Qwen/Qwen3-ASR-0.6B")
             self.assertEqual(ready.json()["queue_depth"], 0)
             self.assertEqual(engine.load_count, 1)
