@@ -61,6 +61,19 @@ def _is_oom(exc: BaseException) -> bool:
     return False
 
 
+def _remove_context_echo(transcript: str, context: str | None) -> str:
+    """Remove exact context echoes without guessing whether other text is speech."""
+    text = str(transcript).strip()
+    prompt = context.strip() if context is not None else ""
+    if not text or not prompt or prompt not in text:
+        return text
+
+    # Replace every exact occurrence with a boundary so surrounding utterances do
+    # not become accidentally concatenated. Preserve meaningful line separation.
+    filtered = text.replace(prompt, "\n")
+    return "\n".join(line.strip() for line in filtered.splitlines() if line.strip())
+
+
 def _safe_model_names(config: dict[str, Any], settings: APISettings, resolved: str) -> tuple[str, str]:
     alias = settings.model_alias
     if Path(resolved).is_absolute():
@@ -242,6 +255,7 @@ def create_app(
                 return _error(500, actual_request_id, "inference_failed", "音声認識に失敗しました。", False)
 
             result = completed.result
+            response_text = _remove_context_echo(result.transcript, job.context)
             response_language = result.detected_language or job.language
             inference_sec = completed.inference_sec
             LOGGER.info(
@@ -251,7 +265,7 @@ def create_app(
             return {
                 "schema_version": SCHEMA_VERSION,
                 "request_id": actual_request_id,
-                "text": str(result.transcript),
+                "text": response_text,
                 "language": response_language,
                 "engine": "qwen3-asr",
                 "backend": "transformers",
@@ -304,7 +318,10 @@ def main() -> int:
         app, host=settings.host, port=settings.port, workers=1
     )
     uvicorn_server = uvicorn.Server(uvicorn_config)
-    uvicorn_server.run()
+    try:
+        uvicorn_server.run()
+    except KeyboardInterrupt:
+        return 130
     return 0 if uvicorn_server.started else 2
 
 

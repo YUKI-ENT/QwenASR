@@ -164,6 +164,54 @@ class APITests(unittest.IsolatedAsyncioTestCase):
         finally:
             await self.close_app(client, lifespan)
 
+    async def test_exact_context_echo_is_removed_but_other_speech_remains(self) -> None:
+        context = "日本の医療現場の会話。聞こえたとおりに書き起こす。推測で補完しない。"
+        engine = FakeEngine()
+        engine.text = f"はいこんにちは。\n{context}\n{context}\nちょっとごめんなさい。"
+        _, _, client, lifespan = await self.use_app(engine)
+        try:
+            response = await client.post(
+                "/transcribe",
+                files={"audio": ("sample.wav", wav_bytes(), "audio/wav")},
+                data={"context": context},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["text"], "はいこんにちは。\nちょっとごめんなさい。")
+        finally:
+            await self.close_app(client, lifespan)
+
+    async def test_context_only_hallucination_becomes_empty_text(self) -> None:
+        context = "聞こえたとおりに書き起こす。"
+        engine = FakeEngine()
+        engine.text = f"{context}\n{context}\n{context}"
+        _, _, client, lifespan = await self.use_app(engine)
+        try:
+            response = await client.post(
+                "/transcribe",
+                files={"audio": ("sample.wav", wav_bytes(), "audio/wav")},
+                data={"context": context},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["text"], "")
+        finally:
+            await self.close_app(client, lifespan)
+
+    async def test_similar_but_not_identical_speech_is_not_removed(self) -> None:
+        context = "推測で補完しない。"
+        engine = FakeEngine()
+        engine.text = "推測では補完しない。"
+        _, _, client, lifespan = await self.use_app(engine)
+        try:
+            response = await client.post(
+                "/transcribe",
+                files={"audio": ("sample.wav", wav_bytes(), "audio/wav")},
+                data={"context": context},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["text"], engine.text)
+        finally:
+            await self.close_app(client, lifespan)
+
     async def test_rejects_unsupported_corrupt_too_long_and_too_large(self) -> None:
         settings = APISettings(model_alias="0.6b", max_audio_sec=0.05, max_upload_mib=0.01)
         _, _, client, lifespan = await self.use_app(settings=settings)
