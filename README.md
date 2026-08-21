@@ -208,7 +208,88 @@ EXE起動時の既定の `config.json`、`models`、`results` は、カレント
 
 ## モデルの事前ダウンロードとオフライン運用
 
-オンライン環境で専用venvを有効にし、モデルをプロジェクト内へ取得します。
+### Hugging Faceからブラウザーで手動ダウンロードする場合
+
+インターネットへ接続できるPCで、使用するモデルのHugging Faceページを開き、`Files and versions` に表示されるファイルをダウンロードします。
+
+- [Qwen/Qwen3-ASR-0.6B](https://huggingface.co/Qwen/Qwen3-ASR-0.6B/tree/main)
+- [Qwen/Qwen3-ASR-1.7B](https://huggingface.co/Qwen/Qwen3-ASR-1.7B/tree/main)
+
+各ファイルのページで `Download` を押してください。`.safetensors` はサイズが大きいため、保存完了後にファイルサイズがHugging Faceの表示と大きく違わないことを確認します。Git LFS/Xetのポインタだけを保存した数百byte程度のファイルではモデルをロードできません。使用するモデルだけをダウンロードすればよく、0.6Bと1.7Bの両方を必ず配置する必要はありません。
+
+次のように、モデルごとに1つのフォルダーを作り、Hugging Face上のファイル名を変えずに同じ階層へ保存します。
+
+```text
+QwenASR/
+├─ config.json
+└─ models/
+   ├─ Qwen3-ASR-0.6B/
+   │  ├─ config.json
+   │  ├─ generation_config.json
+   │  ├─ preprocessor_config.json
+   │  ├─ tokenizer_config.json
+   │  ├─ chat_template.json
+   │  ├─ merges.txt
+   │  ├─ vocab.json
+   │  └─ model.safetensors
+   └─ Qwen3-ASR-1.7B/
+      ├─ config.json
+      ├─ generation_config.json
+      ├─ preprocessor_config.json
+      ├─ tokenizer_config.json
+      ├─ chat_template.json
+      ├─ merges.txt
+      ├─ vocab.json
+      ├─ model.safetensors.index.json
+      ├─ model-00001-of-00002.safetensors
+      └─ model-00002-of-00002.safetensors
+```
+
+モデルリポジトリの `README.md` と `.gitattributes` は実行には不要です。それ以外はモデルの更新で構成が変わる可能性があるため、`Files and versions` に追加ファイルがあれば一緒に保存してください。ダウンロード後、`models` フォルダーごとUSBメモリ等でオフラインPCのQwenASRフォルダーへコピーします。EXE版では `QwenASR.exe` または `QwenASR-Server.exe` と同じフォルダーにある `models` へ配置します。
+
+### `config.json` の設定
+
+QwenASR側の `config.json`（モデルフォルダー内の同名ファイルではありません）を次のように設定します。
+
+```json
+{
+  "model": "Qwen/Qwen3-ASR-0.6B",
+  "model_cache_dir": "models",
+  "offline": true,
+  "api": {
+    "model_alias": "1.7b"
+  },
+  "models": {
+    "0.6b": "Qwen/Qwen3-ASR-0.6B",
+    "1.7b": "Qwen/Qwen3-ASR-1.7B"
+  },
+  "local_model_paths": {
+    "0.6b": "models/Qwen3-ASR-0.6B",
+    "1.7b": "models/Qwen3-ASR-1.7B"
+  }
+}
+```
+
+`config.json.sample` をコピーして使う場合は、既存のほかの設定を残し、`offline` と `local_model_paths` の値だけを変更します。
+
+- `local_model_paths` のキーは `--model 0.6b` / `--model 1.7b` および `api.model_alias` に対応します。値が空でなければ、オンライン用の `models` よりローカルパスが優先されます。
+- 相対パスはQwenASR側の `config.json` があるフォルダーを基準に解決されます。WindowsでもJSON内では上例のように `/` を使えます。
+- 絶対パスも指定できます。Windowsの `D:\ASRModels\Qwen3-ASR-0.6B` を記載する場合は、JSONでは `D:\\ASRModels\\Qwen3-ASR-0.6B` のように `\` を2つ重ねます。
+- 片方のモデルだけ配置する場合は、未配置側を空文字（例: `"1.7b": ""`）のままにし、実行時に配置済みのaliasを選択します。
+- CLIで `--model` を省略するとトップレベルの `model` が使われます。オフラインで省略実行したい場合は、`model` 自体を `"models/Qwen3-ASR-0.6B"` のようなローカルパスに変更してください。
+- APIは `api.model_alias` のモデルを起動時にロードします。上例は1.7Bなので、0.6Bだけ配置した場合は `"model_alias": "0.6b"` に変更します。
+
+`offline: true` にするとHugging Faceへのアクセスを禁止し、モデルロードに `local_files_only=True` を渡します。CLIでは次のように起動します。
+
+```powershell
+python app.py --model 0.6b test_audio/sample.wav
+python app.py --model 1.7b test_audio/sample.wav
+python server.py --config config.json
+```
+
+### CLIで一括ダウンロードする場合
+
+ブラウザーで1ファイルずつ保存する代わりに、オンライン環境で専用venvを有効にし、次のコマンドでモデル一式を取得できます。
 
 ```bash
 pip install "huggingface_hub[cli]"
@@ -216,7 +297,7 @@ huggingface-cli download Qwen/Qwen3-ASR-0.6B --local-dir models/Qwen3-ASR-0.6B
 huggingface-cli download Qwen/Qwen3-ASR-1.7B --local-dir models/Qwen3-ASR-1.7B
 ```
 
-`config.json` の `local_model_paths` を設定します。
+取得後は、前項と同じように `config.json` の `local_model_paths` と `offline` を設定します。
 
 ```json
 "local_model_paths": {
@@ -225,7 +306,7 @@ huggingface-cli download Qwen/Qwen3-ASR-1.7B --local-dir models/Qwen3-ASR-1.7B
 }
 ```
 
-その後は次のどちらかで外部アクセスを禁止できます。
+`config.json` を変更せず一時的にオフラインモードを指定する場合は、次のどちらかを使用できます。
 
 ```bash
 python app.py --offline --model 0.6b test_audio/sample.wav
