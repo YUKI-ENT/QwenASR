@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 import wave
 from contextlib import contextmanager
@@ -17,6 +18,25 @@ SUPPORTED_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac"}
 
 class AudioError(RuntimeError):
     """Raised when an input cannot be prepared for ASR."""
+
+
+def _find_program(name: str) -> str | None:
+    """Find a tool on PATH or next to a frozen Windows executable."""
+    located = shutil.which(name)
+    if located is not None:
+        return located
+    if getattr(sys, "frozen", False):
+        executable_dir = Path(sys.executable).resolve().parent
+        candidates = (executable_dir / name, executable_dir / "bin" / name)
+        if sys.platform == "win32" and not name.lower().endswith(".exe"):
+            candidates += (
+                executable_dir / f"{name}.exe",
+                executable_dir / "bin" / f"{name}.exe",
+            )
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+    return None
 
 
 def validate_audio_file(path: str | Path) -> Path:
@@ -50,7 +70,7 @@ def _duration_with_wave(path: Path) -> float:
 
 
 def _duration_with_ffprobe(path: Path) -> float:
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = _find_program("ffprobe")
     if ffprobe is None:
         raise AudioError(
             "音声長を取得できず、ffprobeも見つかりません。ffmpegをインストールしてください。"
@@ -91,7 +111,7 @@ def get_audio_duration(path: str | Path) -> float:
 
 
 def _convert_to_wav(source: Path, destination: Path) -> None:
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = _find_program("ffmpeg")
     if ffmpeg is None:
         raise AudioError(
             f"{source.suffix.lower()} の変換に必要なffmpegが見つかりません。"
@@ -147,4 +167,3 @@ def list_audio_files(directory: str | Path) -> list[Path]:
         path for path in root.iterdir()
         if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS
     )
-

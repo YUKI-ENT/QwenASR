@@ -29,6 +29,7 @@ from api_service import (
 from audio_utils import AudioError, get_audio_duration
 from cli_common import create_engine, load_config, resolve_model
 from qwen_asr_engine import ASRError
+from runtime_paths import application_path
 from version import APP_VERSION
 
 
@@ -299,7 +300,9 @@ def create_app(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Qwen3-ASR localhost HTTP API")
     parser.add_argument("--version", action="version", version=APP_VERSION)
-    parser.add_argument("--config", default="config.json", help="設定JSON")
+    parser.add_argument(
+        "--config", default=str(application_path("config.json")), help="設定JSON"
+    )
     parser.add_argument("--host", help="localhost listen address")
     parser.add_argument("--port", type=int, help="listen port")
     return parser.parse_args()

@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+build/
+dist/
+*.spec
 
 # Local configuration / secrets
 config.json

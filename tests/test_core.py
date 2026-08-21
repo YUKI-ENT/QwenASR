@@ -9,9 +9,10 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
-from audio_utils import AudioError, get_audio_duration, list_audio_files
+from audio_utils import AudioError, _find_program, get_audio_duration, list_audio_files
 from cli_common import load_config, resolve_model
 from qwen_asr_engine import QwenASREngine
+from runtime_paths import application_dir
 
 
 class AudioUtilsTests(unittest.TestCase):
@@ -32,6 +33,30 @@ class AudioUtilsTests(unittest.TestCase):
             path.write_text("not audio", encoding="utf-8")
             with self.assertRaises(AudioError):
                 get_audio_duration(path)
+
+    def test_frozen_executable_finds_bundled_ffmpeg(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            executable = Path(temp_dir) / "QwenASR.exe"
+            ffmpeg = Path(temp_dir) / "bin" / "ffmpeg.exe"
+            ffmpeg.parent.mkdir()
+            ffmpeg.touch()
+            with (
+                patch.object(sys, "frozen", True, create=True),
+                patch.object(sys, "executable", str(executable)),
+                patch("audio_utils.sys.platform", "win32"),
+                patch("audio_utils.shutil.which", return_value=None),
+            ):
+                self.assertEqual(_find_program("ffmpeg"), str(ffmpeg))
+
+
+class RuntimePathTests(unittest.TestCase):
+    def test_frozen_application_dir_is_executable_parent(self) -> None:
+        executable = Path(tempfile.gettempdir()) / "bundle" / "QwenASR.exe"
+        with (
+            patch.object(sys, "frozen", True, create=True),
+            patch.object(sys, "executable", str(executable)),
+        ):
+            self.assertEqual(application_dir(), executable.parent.resolve())
 
 
 class ConfigTests(unittest.TestCase):

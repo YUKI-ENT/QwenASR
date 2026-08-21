@@ -145,6 +145,59 @@ curl -s -X POST http://127.0.0.1:8010/transcribe \
 
 RTX 5080 16GB / bfloat16での既存実測では、0.6Bはロード後約2.1 GiB・推論時約2.2 GiB、1.7Bはロード後約4.7 GiB・推論時約4.9 GiBのプロセスVRAM使用量でした。音声長や環境で変動するため、余裕を確保してください。
 
+## Windows向けEXEの作成
+
+Windows用のEXEは、対象のWindows PC（または同等のWindows環境）でビルドします。Linux上のPyInstallerからWindows用EXEをクロスビルドすることはできません。PythonやモデルをEXEへ埋め込むのではなく、CUDA DLLを含む依存ファイル一式を同じフォルダーに置く `onedir` 形式です。PyTorchが大きいため配布フォルダーも数GBになりますが、`onefile` より起動とDLL読込が安定します。
+
+前提:
+
+- 64-bit Windows 11
+- 64-bit Python 3.12
+- 対応するNVIDIAドライバー
+- PowerShell
+
+PowerShellでプロジェクトへ移動し、新しいvenvからビルドします。
+
+```powershell
+py -3.12 -m venv .venv-win
+.\.venv-win\Scripts\Activate.ps1
+Set-ExecutionPolicy -Scope Process Bypass
+.\packaging\build_windows.ps1 -InstallDependencies
+```
+
+既に依存パッケージを導入済みなら `-InstallDependencies` は省略できます。CLIだけなら `-Target cli`、APIだけなら `-Target server` を指定できます。
+
+出力先:
+
+```text
+dist\QwenASR\QwenASR.exe
+dist\QwenASR-Server\QwenASR-Server.exe
+```
+
+各フォルダーには `config.json`、空の `models` / `results` も作成されます。フォルダー内の一部だけでなく、フォルダー全体を配布してください。モデルはサイズが大きいため自動では同梱しません。オフライン運用では、事前取得したモデルをたとえば `models\Qwen3-ASR-0.6B` へコピーし、同梱された `config.json` を次のように変更します。
+
+```json
+"offline": true,
+"local_model_paths": {
+  "0.6b": "models/Qwen3-ASR-0.6B",
+  "1.7b": ""
+}
+```
+
+実行例:
+
+```powershell
+cd dist\QwenASR
+.\QwenASR.exe --model 0.6b C:\audio\sample.wav
+
+cd ..\QwenASR-Server
+.\QwenASR-Server.exe
+```
+
+EXE起動時の既定の `config.json`、`models`、`results` は、カレントディレクトリではなくEXEのあるフォルダーを基準に解決されます。MP3/M4AをCLIで扱う場合は、Windows版の `ffmpeg.exe` と `ffprobe.exe` をEXEと同じフォルダー（または `bin` サブフォルダー）に置くか、PATHへ追加してください。APIはWAVだけを受け付けるため通常は不要です。
+
+初回確認はモデルを同梱してビルドし直すのではなく、`dist` のフォルダーへモデルをコピーして行います。Windows Defender等が未署名の自作EXEを警告する場合があります。第三者へ配布する場合はコード署名と、PyTorch・FFmpeg・モデルを含む各ライセンスの確認が必要です。
+
 ### APIのトラブルシューティング
 
 - モデル未配置 / offline時のキャッシュ不足: `local_model_paths` の相対パスが `config.json` 基準で正しいか、モデルが全部ダウンロード済みかを確認します。初回取得が必要なら一度 `offline: false` で取得します。

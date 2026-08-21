@@ -10,16 +10,23 @@ from pathlib import Path
 from audio_utils import AudioError, validate_audio_file
 from cli_common import create_engine, load_config, print_result, resolve_model, save_result
 from qwen_asr_engine import ASRError
+from runtime_paths import application_path
+from version import APP_VERSION
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Qwen3-ASR 日本語音声認識テスト (Transformers backend)"
     )
+    parser.add_argument("--version", action="version", version=APP_VERSION)
     parser.add_argument("audio_file", help="wav/mp3/m4a/flac 音声ファイル")
     parser.add_argument("--model", choices=("0.6b", "1.7b"), help="モデル切替")
-    parser.add_argument("--config", default="config.json", help="設定JSON")
-    parser.add_argument("--results-dir", default="results", help="結果保存先")
+    parser.add_argument(
+        "--config", default=str(application_path("config.json")), help="設定JSON"
+    )
+    parser.add_argument(
+        "--results-dir", default=str(application_path("results")), help="結果保存先"
+    )
     parser.add_argument("--offline", action="store_true", help="外部アクセスを禁止")
     unload = parser.add_mutually_exclusive_group()
     unload.add_argument("--unload-after", dest="unload_after", action="store_true")
