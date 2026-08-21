@@ -5,6 +5,7 @@ __pycache__/
 build/
 dist/
 *.spec
+*.code-workspace
 
 # Local configuration / secrets
 config.json

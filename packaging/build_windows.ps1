@@ -10,23 +10,23 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
 
 if ($env:OS -ne "Windows_NT") {
-    throw "Windows用EXEはWindows上でビルドしてください。"
+    throw "Windows executables must be built on Windows."
 }
 
 $Python = Get-Command python -ErrorAction Stop
 function Invoke-Python {
     & $Python.Source @args
     if ($LASTEXITCODE -ne 0) {
-        throw "Pythonコマンドに失敗しました: python $args"
+        throw "Python command failed: python $args"
     }
 }
 
 $PythonInfo = & $Python.Source -c "import platform,sys; print(f'{sys.version_info.major}.{sys.version_info.minor}|{platform.architecture()[0]}')"
 if ($LASTEXITCODE -ne 0) {
-    throw "Pythonを実行できません。"
+    throw "Unable to run Python."
 }
 if ($PythonInfo -ne "3.12|64bit") {
-    throw "64-bit Python 3.12が必要です（検出: $PythonInfo）。"
+    throw "64-bit Python 3.12 is required (detected: $PythonInfo)."
 }
 
 if ($InstallDependencies) {
@@ -64,7 +64,7 @@ function Build-QwenASRExecutable {
     $BuiltExecutable = Join-Path $OutputDir "$Name.exe"
     & $BuiltExecutable --version
     if ($LASTEXITCODE -ne 0) {
-        throw "$Name の起動確認に失敗しました。"
+        throw "Failed to start $Name."
     }
 }
 
@@ -78,4 +78,4 @@ if ($Target -in @("all", "server")) {
     )
 }
 
-Write-Host "ビルド完了: $ProjectRoot\dist"
+Write-Host "Build complete: $ProjectRoot\dist"
