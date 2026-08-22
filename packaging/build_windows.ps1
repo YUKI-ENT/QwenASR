@@ -57,6 +57,19 @@ function Build-QwenASRExecutable {
     Invoke-Python @Arguments
 
     $OutputDir = Join-Path $ProjectRoot "dist/$Name"
+    $NagisaTagger = Join-Path $OutputDir "_internal/nagisa/tagger.py"
+    if (Test-Path -LiteralPath $NagisaTagger) {
+        $NagisaSource = [IO.File]::ReadAllText($NagisaTagger)
+        $NagisaSource = $NagisaSource.Replace(
+            "w.replace('(', '\(').replace(')', '\)')",
+            "w.replace('(', r'\(').replace(')', r'\)')"
+        )
+        [IO.File]::WriteAllText(
+            $NagisaTagger,
+            $NagisaSource,
+            [Text.UTF8Encoding]::new($false)
+        )
+    }
     Copy-Item "config.json.sample" (Join-Path $OutputDir "config.json") -Force
     New-Item -ItemType Directory -Force (Join-Path $OutputDir "models") | Out-Null
     New-Item -ItemType Directory -Force (Join-Path $OutputDir "results") | Out-Null

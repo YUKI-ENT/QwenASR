@@ -121,9 +121,16 @@ python server.py --config config.json
 # 停止は Ctrl+C
 ```
 
+起動時にモデルを選ぶ場合は `--model` でaliasを指定します。この値は `config.json` の `api.model_alias` を今回の起動だけ上書きします。
+
+```bash
+python server.py --config config.json --model 0.6b
+python server.py --config config.json --model 1.7b
+```
+
 アプリケーションバージョンは `version.py` の `APP_VERSION`で、`YYYYMMDD` 形式（例: `20260821`）で一元管理します。`python server.py --version` で確認でき、`/health` と `/ready` の `app_version` にも同じ値が返ります。API互換性用の `schema_version` とは別の値です。
 
-`--host` と `--port` でlisten先を上書きできますが、hostは `127.0.0.1`、`localhost`、`::1` のみ許可されます。Uvicorn workerは1つに固定されます。
+`--model`、`--host`、`--port` で対応する `api` 設定を上書きできます。hostの既定値は `127.0.0.1` で、`localhost` または有効なIPv4/IPv6アドレスを指定できます。LANへ公開する場合は、サーバーPCに割り当てられたLAN側IP、または全IPv4インターフェースを表す `0.0.0.0` を指定し、Windows Firewallで接続元をSpeechSummarizer端末に限定してください。Uvicorn workerは1つに固定されます。
 
 動作確認:
 
@@ -141,7 +148,7 @@ curl -s -X POST http://127.0.0.1:8010/transcribe \
 
 無音時などにQwenが `context` 全文を認識文として繰り返す場合があるため、APIは応答前にcontextと完全一致する文言をすべて除去します。除去後に発話が残らなければ `text` は空文字になります。類似した発話の誤削除を避けるため、あいまい一致では除去しません。これはcontext echo対策であり、一般的な無音検出の代替ではありません。
 
-このAPIには認証やTLSがありません。患者音声を扱う可能性があるため、リバースプロキシ等を使ってLANやインターネットへ公開しないでください。uploadはサーバー生成名の一時ファイルとして扱われ、成功・失敗・タイムアウトのいずれでも推論が終わり次第削除されます。
+このAPIには認証やTLSがありません。既定ではlocalhostだけに公開されます。LANへ公開する場合は信頼できるローカルLANに限定し、Windows Firewallで接続元IPを制限してください。インターネットへは公開しないでください。uploadはサーバー生成名の一時ファイルとして扱われ、成功・失敗・タイムアウトのいずれでも推論が終わり次第削除されます。
 
 RTX 5080 16GB / bfloat16での既存実測では、0.6Bはロード後約2.1 GiB・推論時約2.2 GiB、1.7Bはロード後約4.7 GiB・推論時約4.9 GiBのプロセスVRAM使用量でした。音声長や環境で変動するため、余裕を確保してください。
 
@@ -197,6 +204,14 @@ cd ..\QwenASR-Server
 EXE起動時の既定の `config.json`、`models`、`results` は、カレントディレクトリではなくEXEのあるフォルダーを基準に解決されます。MP3/M4AをCLIで扱う場合は、Windows版の `ffmpeg.exe` と `ffprobe.exe` をEXEと同じフォルダー（または `bin` サブフォルダー）に置くか、PATHへ追加してください。APIはWAVだけを受け付けるため通常は不要です。
 
 初回確認はモデルを同梱してビルドし直すのではなく、`dist` のフォルダーへモデルをコピーして行います。Windows Defender等が未署名の自作EXEを警告する場合があります。第三者へ配布する場合はコード署名と、PyTorch・FFmpeg・モデルを含む各ライセンスの確認が必要です。
+
+GitHub Release向けに2GiB未満の複数ファイルへ分割した自己展開パッケージを作る場合は、Inno Setup 6をインストールして次を実行します。対象は `dist\QwenASR-Server` だけです。
+
+```powershell
+.\packaging\build_windows_installer.ps1
+```
+
+生成物と利用方法の詳細は `WindowsEXE.md` の「GitHub Release用の分割インストーラー」を参照してください。
 
 ### APIのトラブルシューティング
 

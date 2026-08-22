@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
 import math
 import time
@@ -75,8 +76,17 @@ class APISettings:
             return result
 
         host = raw.get("host", "127.0.0.1")
-        if not isinstance(host, str) or host not in {"127.0.0.1", "localhost", "::1"}:
-            raise ValueError("api.hostはlocalhost (127.0.0.1/localhost/::1) のみ指定できます。")
+        if not isinstance(host, str):
+            raise ValueError("api.hostはIPアドレスまたはlocalhostで指定してください。")
+        if host.lower() == "localhost":
+            host = "localhost"
+        else:
+            try:
+                ipaddress.ip_address(host)
+            except ValueError as exc:
+                raise ValueError(
+                    "api.hostはIPアドレスまたはlocalhostで指定してください。"
+                ) from exc
         alias_value = raw.get("model_alias")
         if alias_value is not None and not isinstance(alias_value, str):
             raise ValueError("api.model_aliasは文字列で指定してください。")

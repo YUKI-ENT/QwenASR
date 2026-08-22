@@ -297,27 +297,34 @@ def create_app(
     return app
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Qwen3-ASR localhost HTTP API")
     parser.add_argument("--version", action="version", version=APP_VERSION)
     parser.add_argument(
         "--config", default=str(application_path("config.json")), help="設定JSON"
     )
-    parser.add_argument("--host", help="localhost listen address")
+    parser.add_argument("--model", dest="model_alias", help="model alias (例: 0.6b / 1.7b)")
+    parser.add_argument("--host", help="listen address")
     parser.add_argument("--port", type=int, help="listen port")
-    return parser.parse_args()
+    return parser.parse_args(args)
+
+
+def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
+    api_config = dict(config.get("api", {}) or {})
+    if args.model_alias is not None:
+        api_config["model_alias"] = args.model_alias
+    if args.host is not None:
+        api_config["host"] = args.host
+    if args.port is not None:
+        api_config["port"] = args.port
+    config["api"] = api_config
 
 
 def main() -> int:
     args = parse_args()
     try:
         config, base_dir = load_config(args.config)
-        api_config = dict(config.get("api", {}) or {})
-        if args.host is not None:
-            api_config["host"] = args.host
-        if args.port is not None:
-            api_config["port"] = args.port
-        config["api"] = api_config
+        apply_cli_overrides(config, args)
         settings = APISettings.from_config(config)
         app = create_app(config, base_dir, settings=settings)
     except (ValueError, ASRError, AudioError) as exc:

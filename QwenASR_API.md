@@ -91,7 +91,7 @@ QwenASR APIが担当しないもの:
 ### 6.1 必須動作
 
 - FastAPI + Uvicornで実装する。
-- 既定listen先は `127.0.0.1:8010` とし、外部インターフェースへ公開しない。
+- 既定listen先は `127.0.0.1:8010` とする。設定で有効なIPv4/IPv6アドレスを指定できるようにし、LAN公開時はWindows Firewallで接続元をSpeechSummarizer端末に限定する。
 - モデルはサーバー起動時に1回だけロードする。
 - 各リクエスト後に `unload()` しない。
 - サーバー終了時に `engine.unload()` を呼ぶ。
@@ -109,6 +109,7 @@ QwenASR APIが担当しないもの:
 ```bash
 source .venv/bin/activate
 python server.py --config config.json
+python server.py --config config.json --model 1.7b
 ```
 
 必要なら `QwenASR_API.sh` のような薄い起動スクリプトを追加してよい。スクリプトは必ず自身の
@@ -147,6 +148,7 @@ python server.py --config config.json
 要件:
 
 - API起動時は `api.model_alias` を `resolve_model()` に渡してモデルを固定する。
+- `--model` が指定された場合は `api.model_alias` を今回の起動だけ上書きする。
 - `api.model_alias` が空または未指定なら、既存のトップレベル `model` を使う。
 - 相対モデルパスとキャッシュパスは、これまでどおり設定ファイル位置を基準にする。
 - `offline` の既存動作を維持する。

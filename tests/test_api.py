@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from api_service import APISettings
-from server import create_app
+from server import apply_cli_overrides, create_app, parse_args
 
 
 def wav_bytes(duration_sec: float = 0.1, rate: int = 16000) -> bytes:
@@ -344,12 +344,42 @@ class APITests(unittest.IsolatedAsyncioTestCase):
 
 class SettingsTests(unittest.TestCase):
     def test_settings_validation(self) -> None:
-        with self.assertRaisesRegex(ValueError, "localhost"):
-            APISettings.from_config({"api": {"host": "0.0.0.0"}})
+        self.assertEqual(APISettings.from_config({}).host, "127.0.0.1")
+        for host in (
+            "localhost", "127.0.0.1", "192.168.253.0", "0.0.0.0", "::1", "::"
+        ):
+            with self.subTest(host=host):
+                configured = APISettings.from_config({"api": {"host": host}})
+                self.assertEqual(configured.host, host)
+        with self.assertRaisesRegex(ValueError, "IPアドレス"):
+            APISettings.from_config({"api": {"host": "example.com"}})
         with self.assertRaisesRegex(ValueError, "max_queue_size"):
             APISettings.from_config({"api": {"max_queue_size": 0}})
         with self.assertRaisesRegex(ValueError, "port"):
             APISettings.from_config({"api": {"port": "8010"}})
+
+
+class ServerCommandLineTests(unittest.TestCase):
+    def test_model_option_overrides_configured_api_alias(self) -> None:
+        args = parse_args(
+            ["--config", "custom.json", "--model", "1.7b", "--port", "8020"]
+        )
+        config = {"api": {"model_alias": "0.6b", "host": "127.0.0.1"}}
+
+        apply_cli_overrides(config, args)
+
+        self.assertEqual(args.config, "custom.json")
+        self.assertEqual(config["api"]["model_alias"], "1.7b")
+        self.assertEqual(config["api"]["host"], "127.0.0.1")
+        self.assertEqual(config["api"]["port"], 8020)
+
+    def test_omitted_model_option_keeps_configured_alias(self) -> None:
+        args = parse_args([])
+        config = {"api": {"model_alias": "0.6b"}}
+
+        apply_cli_overrides(config, args)
+
+        self.assertEqual(config["api"]["model_alias"], "0.6b")
 
 
 if __name__ == "__main__":
