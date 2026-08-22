@@ -352,6 +352,8 @@ SpeechSummarizerは終了コードだけでなく、標準エラー、プロセ�
 - Inno Setup 6がインストールされている
 - 配布するモデルが `dist\QwenASR-Server\models` に配置されている
 
+商用利用の場合は、Inno Setup 6.5以降の[商用ライセンス条件](https://jrsoftware.org/ishelp/topic_purchase.htm)を確認し、必要なライセンスを用意してください。モデル一式を圧縮するため、ビルドには環境によって数十分かかります。
+
 作成コマンド:
 
 ```powershell
